@@ -43,6 +43,20 @@
 
 	function initlocal() {
 		console.log("init socket");
+
+		rpcOut = new RTCPeerConnection();
+
+		// when our outbound peer connection generates ice candidates, send them to the other client
+		rpcOut.addEventListener('icecandidate', e => onIceCandidateEvent(e) );
+		rpcOut.addEventListener('iceconnectionstatechange', e => onIceStateChange(e, rpcOut, "out"));
+		console.log("added ice listeners to rpcout");
+
+
+		rpcIn = new RTCPeerConnection();
+		rpcIn.addEventListener('iceconnectionstatechange', e => onIceStateChange(e, rpcIn, "in"));
+		rpcIn.addEventListener('track', gotRemoteStream);
+
+
 		socket = io();
 		// got user list from server, update local stuff
 		socket.on("user-list", (users) => {
@@ -51,11 +65,23 @@
 		});
 
 		// the other client sent us an offer
-		socket.on("relay-offer", (data) => {
+		socket.on("relay-offer", async (data) => {
 			console.log("got an offer from other client: ",data);
-			rpcIn = new RTCPeerConnection();
-			rpcIn.setRemoteDescription(data.offer);
-			rpcIn.addEventListener('track', gotRemoteStream);
+
+			await rpcIn.setRemoteDescription(data.offer);
+			var answer = await rpcIn.createAnswer();
+			await rpcIn.setLocalDescription(answer);
+
+			var remotesocketid = data.sourcesocketid;
+			socket.emit("relay-answer", {
+				targetsocketid: remotesocketid,
+				answer: answer
+			});
+		});
+
+		socket.on("relay-answer", async (data) => {
+			console.log("got an answer from other client: ",data);
+			await rpcOut.setRemoteDescription(data.answer);
 		});
 
 		// other client sent us an ice candidate
@@ -88,15 +114,9 @@
 		remotesocketid = userlist.find( socketid => socketid != localsocketid );
 		console.log("remotesocketid: ",remotesocketid);
 
-		rpcOut = new RTCPeerConnection();
 		// hook the streams from our local input to the outbound peer connection
 		localStream.getTracks().forEach(track => rpcOut.addTrack(track, localStream)); 
 		console.log("added local stream to rpcout");
-
-		// when our outbound peer connection generates ice candidates, send them to the other client
-		rpcOut.addEventListener('icecandidate', e => onIceCandidateEvent(e) );
-		rpcOut.addEventListener('iceconnectionstatechange', e => onIceStateChange(e, rpcOut));
-		console.log("added ice listeners to rpcout");
 
 		// create offer and send it to the remote peer
 		const offerOptions = {
@@ -126,8 +146,8 @@
 		});
 	}
 
-	function onIceStateChange(event, peerconnection) {
-	    console.log(`ICE state: ${peerconnection.iceConnectionState}`);
+	function onIceStateChange(event, peerconnection, connectiontype) {
+	    console.log(`ICE state: ${connectiontype} - ${peerconnection.iceConnectionState}`);
 	    console.log('ICE state change event: ', event);
 	}
 

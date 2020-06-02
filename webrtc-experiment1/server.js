@@ -52,6 +52,16 @@ function addnewuser(socket) {
 		});
 	});
 
+	// answer from second client responding to first clients offer
+	socket.on("relay-answer", data => {
+		console.log('relay-answer from '+socket.id +' to '+data.targetsocketid);
+		socket.to(data.targetsocketid).emit("relay-answer", {
+			requestingsocketid: socket.id,
+			answer: data.answer
+		});
+	});
+
+
 	// sent by source client, target a specific other client, send ICE candidate
 	socket.on("send-ice-candidate", data => {
 		console.log('send-ice-candidate from '+socket.id +' to '+data.targetsocketid);
