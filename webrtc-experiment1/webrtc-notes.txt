@@ -103,7 +103,7 @@ Basic architecture:
 	When users enter/leave a room, update that rooms user list and emit a 'room-users-updated' event to everyone in that room.
 
 	Client:
-	Each client will have a 2-way connection with each other client in the room, and is responsible for initiating the 'inbound' connections.
+	Each client will have a 2-way connection with each other client in the room, and is responsible for initiating the 'outbound' connections.
 	Initiating the connections works essentially just like in the experiment, except that could should be refactored, a bit more OO.
 	The client should end up with a list of users in the room, and an inbound and outbound RTCPeerConnection to each one.
 	(So, with N users, total number of connections will be N * ((N-1)*2) ).
