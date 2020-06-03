@@ -1,0 +1,134 @@
+https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API
+
+https://github.com/node-webrtc/node-webrtc
+
+Start a broadcast. Your stream will be forwarded to multiple viewers. Although you can prototype such a system with node-webrtc, 
+you should consider using an <a href="https://webrtcglossary.com/sfu/" target="_blank">SFU</a>.
+
+https://mediasoup.org/documentation/
+https://github.com/versatica/mediasoup          SFU server
+https://www.npmjs.com/package/protoo-server     signalling server
+
+https://mediasoup.org/documentation/examples/   examples
+https://github.com/mkhahani/mediasoup-sample-app
+
+
+
+RTCPeerConnection   is a peer-to-peer connection between two browsers
+MediaStream(s) can be added to the RTCPeerConnection   (so can RTCDataChannels)
+MediaStream(s) can contain multiple tracks of media, including multiple audio tracks
+
+
+
+
+mediasoup has problems installing in windows right now
+need to add path to msbuild, add env var for GYP, workarounds for problems in this git fork: npm install git+https://github.com/GraphCeppelin/mediasoup.git
+but i still cant get it to work in windows
+
+
+
+
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -subj "/C=US/ST=Michigan/L=Detroit/O=Book Club/OU=Org/CN=192.160.10.101"
+openssl req -new -key server.key -out server.csr 
+no none of these worked
+
+finally figured out i can get it working in firefox
+
+F:\dev\webrtc-fuckyou-2   is the current working area
+
+
+::::::::::::  5/24
+still need to actually get remote video working, dont really need the video, but just the audio
+
+so when a client is connected, gets a list of the other clients
+right now
+  client A requests a call to client B
+  if client B accepts, it sends a message back to client A
+  presumably they should both see each others video stream now, but they dont
+this is fucked up and not working anyways
+
+this guys stuff looks a little less hacky, and works right out of the box
+https://webrtc.github.io/samples/src/content/peerconnection/pc1/
+although it looks like its just connecting me to myself, but the signal/negotiation stuff looks more robust
+the sample opens a call to itself, but it does all kinds of sdp options, ice signalling, etc.
+
+so heres what we do
+server runs and hosts static content for client
+when a client connects to server:
+  add them to the list of connected clients
+  ondisconnect: remove them from list
+
+server commands:
+  get client list:  returns a list of all connected clients, the socket ids
+  relay offer:  passes an rtc offer to the designated socket
+
+when clients connect
+  first call getClientList
+  then foreach client,  create an offer and send it to the relayOffer endpoint to init negotiation with that client
+
+
+:::::::::::  5/25
+this is a lot more helpful once you know wtf is going on, but it also explains a lot of other stuff that makes life harder now
+https://webrtc.org/getting-started/peer-connections
+
+after the offer is sent, and answered, still need to negotiate ICE for the actual connection
+also im pretty sure now that a single instance of RTCPeerConnection is only relevant for a single peer-to-peer connection
+and i think it only goes one way as far as i can tell
+
+to send video/audio one way, there has to be a local and remote RPC. local sends and offer to the remote, remote answers
+then the local sends ice candidates to the remote and they negotiate on-the-fly until it can send the actual video stream
+then if you want two-way video, you'd need to do the whole thing the other way too
+all the offer/ice stuff is the signalling that webrtc doesnt fulfill directly, you have to do that through your server
+where is the ice server? one demo showed a google ice server. is it a public service used by all chrome browsers?
+ive never seen anyone spell out the ice server configs in their demos, then again, most of them didnt even do ice negotiation
+
+
+this all means the actual client will need to be somewhat more sophisticated, handling multiple 2-way connections to multiple remote clients
+for the moment im still just trying to get it to work with a single client, even one-way
+
+:::::::::::::  6/2
+got it working   missing was: at least the answer, possibly the timing when event handlers were added
+need to test over internet
+
+next:
+work on dynamic volume control on one channel
+refactor client code into a js class, or at least a namespace or something, make it abstract/reusable
+
+
+Basic architecture:
+
+	Server mostly still just relays messages back and forth between clients and maintains a list of users in a room.
+	Server needs to step up and have a list of rooms, with a list of users in _each_ room, not just a global list.
+	Messages need to be scoped to just the users in each room.
+	When users enter/leave a room, update that rooms user list and emit a 'room-users-updated' event to everyone in that room.
+
+	Client:
+	Each client will have a 2-way connection with each other client in the room, and is responsible for initiating the 'inbound' connections.
+	Initiating the connections works essentially just like in the experiment, except that could should be refactored, a bit more OO.
+	The client should end up with a list of users in the room, and an inbound and outbound RTCPeerConnection to each one.
+	(So, with N users, total number of connections will be N * ((N-1)*2) ).
+
+	When you join:
+	[For now] the url contains the id of the room, so the client knows which room to join when it first starts up.
+	(We can add UI for selecting rooms, permissions, creating rooms, etc. later).
+	When the client joins a room, server sends back all the info about the room, mostly the markup of the "map" of the room.
+	When clients receive the 'room-users-updated' message, compare it to current list, look for any new/dropped users, manage connections.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
